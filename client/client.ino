@@ -1,11 +1,18 @@
 #include "WiFi.h"
 #include <U8g2lib.h>
+#include <ESP32RotaryEncoder.h>
 #include "Wire.h"
 
-const int ButtonPin = 13;
-int current_i2c = 0;
+const int rotSW = 13;
+const int rotDT = 26;
+const int rotCLK = 25;
+
+RotaryEncoder rotaryEncoder(rotCLK, rotDT, rotSW);
+
 int counter = 0;
 int btn_prev;
+
+int current_i2c = 0;
 #define TCAADDR 0x70
 
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/U8X8_PIN_NONE);
@@ -23,10 +30,17 @@ void tcaselect(uint8_t i)
 void setup()
 {
   Serial.begin(115200);
-  pinMode(ButtonPin, INPUT);
-  btn_prev = digitalRead(ButtonPin);
+  pinMode(rotSW, INPUT);
+
+  btn_prev = digitalRead(rotSW);
 
   Serial.println("Init");
+
+  rotaryEncoder.setBoundaries(1, 10, true);
+  rotaryEncoder.setEncoderType(EncoderType::HAS_PULLUP);
+  rotaryEncoder.begin();
+
+  counter = rotaryEncoder.getEncoderValue();
 
   Wire.begin();
 
@@ -57,27 +71,37 @@ void setup()
 
 void loop()
 {
-  int btnState = digitalRead(ButtonPin);
-  if (btnState == LOW && btn_prev == HIGH)
+  counter = rotaryEncoder.getEncoderValue();
+
+  int btn = digitalRead(rotSW);
+  if (btn != btn_prev)
   {
-    if (current_i2c == 0)
+    if (btn == HIGH)
     {
-      current_i2c = 1;
+      Serial.println("Button Released");
     }
     else
     {
-      current_i2c = 0;
+      Serial.println("Button Pressed");
     }
   }
-  btn_prev = btnState;
+  btn_prev = btn;
 
-  tcaselect(current_i2c);
+  tcaselect(0);
 
   u8g2.clearBuffer();                           // clear the internal memory
   u8g2.setFont(u8g2_font_ncenB08_tr);           // choose a suitable font
   u8g2.drawStr(0, 10, "Hello World!");          // write something to the internal memory
   u8g2.drawStr(0, 30, String(counter).c_str()); // write something to the internal memory
   u8g2.sendBuffer();                            // transfer internal memory to the display
-  delay(100);
-  counter++;
+
+  tcaselect(1);
+
+  u8g2.clearBuffer();                           // clear the internal memory
+  u8g2.setFont(u8g2_font_ncenB08_tr);           // choose a suitable font
+  u8g2.drawStr(0, 10, "Hello World!");          // write something to the internal memory
+  u8g2.drawStr(0, 30, String(counter).c_str()); // write something to the internal memory
+  u8g2.sendBuffer();                            // transfer internal memory to the display
+
+  delay(10);
 }
