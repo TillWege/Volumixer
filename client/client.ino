@@ -2,6 +2,7 @@
 #include <U8g2lib.h>
 #include <ESP32RotaryEncoder.h>
 #include "Wire.h"
+#include "multi.h"
 
 const int rotSW = 13;
 const int rotDT = 26;
@@ -12,29 +13,14 @@ RotaryEncoder rotaryEncoder(rotCLK, rotDT, rotSW);
 int counter = 0;
 int btn_prev;
 
-int current_i2c = 0;
-#define TCAADDR 0x70
-
-U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/U8X8_PIN_NONE);
-
-void tcaselect(uint8_t i)
-{
-  if (i > 7)
-    return;
-
-  Wire.beginTransmission(TCAADDR);
-  Wire.write(1 << i);
-  Wire.endTransmission();
-}
-
 void setup()
 {
+  Serial.println("Setup::Start");
   Serial.begin(115200);
+
   pinMode(rotSW, INPUT);
 
   btn_prev = digitalRead(rotSW);
-
-  Serial.println("Init");
 
   rotaryEncoder.setBoundaries(1, 10, true);
   rotaryEncoder.setEncoderType(EncoderType::HAS_PULLUP);
@@ -43,30 +29,9 @@ void setup()
   counter = rotaryEncoder.getEncoderValue();
 
   Wire.begin();
+  i2cScan();
 
-  Serial.println("\nTCAScanner ready!");
-
-  for (uint8_t t = 0; t < 8; t++)
-  {
-    tcaselect(t);
-    Serial.print("TCA Port #");
-    Serial.println(t);
-
-    for (uint8_t addr = 0; addr <= 127; addr++)
-    {
-      if (addr == TCAADDR)
-        continue;
-
-      Wire.beginTransmission(addr);
-      if (!Wire.endTransmission())
-      {
-        Serial.print("Found I2C 0x");
-        Serial.println(addr, HEX);
-        u8g2.begin();
-      }
-    }
-  }
-  Serial.println("\ndone");
+  Serial.println("Setup::End");
 }
 
 void loop()
