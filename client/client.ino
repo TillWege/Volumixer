@@ -1,42 +1,55 @@
 #include "WiFi.h"
-#include <U8g2lib.h>
 #include <ESP32RotaryEncoder.h>
 #include "Wire.h"
 #include "multi.h"
+#include <U8g2lib.h>
 
-const int rotSW = 13;
-const int rotDT = 26;
-const int rotCLK = 25;
+const int rotSW = 5;
+const int rotDT = 18;
+const int rotCLK = 19;
+const int slider = 15;
 
-RotaryEncoder rotaryEncoder(rotCLK, rotDT, rotSW);
+RotaryEncoder *rotaryEncoder;
+Multiplexer *multiplexer;
 
-int counter = 0;
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/U8X8_PIN_NONE);
+
+int counter[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 int btn_prev;
+
+#include "ADS1X15.h"
+
+ADS1115 ADS(0x48);
 
 void setup()
 {
   Serial.println("Setup::Start");
   Serial.begin(115200);
+  Wire.begin();
+
+  multiplexer = new Multiplexer(u8g2);
 
   pinMode(rotSW, INPUT);
+  pinMode(slider, INPUT);
 
   btn_prev = digitalRead(rotSW);
 
-  rotaryEncoder.setBoundaries(1, 10, true);
-  rotaryEncoder.setEncoderType(EncoderType::HAS_PULLUP);
-  rotaryEncoder.begin();
+  rotaryEncoder = new RotaryEncoder(rotCLK, rotDT, rotSW);
+  rotaryEncoder->setBoundaries(-10, 10, false);
+  rotaryEncoder->setEncoderType(EncoderType::HAS_PULLUP);
+  rotaryEncoder->begin();
 
-  counter = rotaryEncoder.getEncoderValue();
-
-  Wire.begin();
-  i2cScan();
+  u8g2.begin();
 
   Serial.println("Setup::End");
+  ADS.begin();
+  ADS.setGain(0);
 }
 
 void loop()
 {
-  counter = rotaryEncoder.getEncoderValue();
+  int newC = rotaryEncoder->getEncoderValue();
+  counter[multiplexer->get_active_device()] += newC;
 
   int btn = digitalRead(rotSW);
   if (btn != btn_prev)
@@ -48,25 +61,27 @@ void loop()
     else
     {
       Serial.println("Button Pressed");
+      multiplexer->next_device();
     }
   }
   btn_prev = btn;
 
-  tcaselect(0);
+  Serial.print("Slider: ");
+  int16_t val = ADS.readADC(0);
+  Serial.println(map(val, 0, 21000, 0, 100));
 
-  u8g2.clearBuffer();                           // clear the internal memory
-  u8g2.setFont(u8g2_font_ncenB08_tr);           // choose a suitable font
-  u8g2.drawStr(0, 10, "Hello World!");          // write something to the internal memory
-  u8g2.drawStr(0, 30, String(counter).c_str()); // write something to the internal memory
-  u8g2.sendBuffer();                            // transfer internal memory to the display
+  float f = ADS.toVoltage(2); // voltage factor
+  Serial.print("\tAnalog0: ");
+  Serial.print(val);
+  Serial.print('\t');
+  Serial.println(val * f, 3);
 
-  tcaselect(1);
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_ncenB08_tr);
 
-  u8g2.clearBuffer();                           // clear the internal memory
-  u8g2.setFont(u8g2_font_ncenB08_tr);           // choose a suitable font
-  u8g2.drawStr(0, 10, "Hello World!");          // write something to the internal memory
-  u8g2.drawStr(0, 30, String(counter).c_str()); // write something to the internal memory
-  u8g2.sendBuffer();                            // transfer internal memory to the display
+  u8g2.drawStr(0, 10, "Hello World!");
+  u8g2.drawStr(0, 20, String(counter[multiplexer->get_active_device()]).c_str());
+  u8g2.sendBuffer();
 
   delay(10);
 }
